@@ -1,6 +1,22 @@
-downloads/
+
+# Python
 __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# Downloads and generated audio
+downloads/
+*.mp3
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Environment variables
 .env
+.env.*
+
+# Operating system files
+.DS_Store
+Thumbs.db
