@@ -1,5 +1,4 @@
-
 flask
 flask-cors
-yt-dlp[default]
+yt-dlp[default]>=2025.1.15
 gunicorn
