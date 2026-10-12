@@ -70,7 +70,7 @@ def convert():
     except Exception:
         app.logger.exception("Audio conversion failed")
         return jsonify({
-            "error": "Conversion failed. Check the URL and FFmpeg installation."
+            "error": f"Conversion failed: {str(e)[:300]}"
         }), 500
 
 
