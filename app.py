@@ -67,11 +67,13 @@ def convert():
             mimetype="audio/mpeg",
         )
 
-    except Exception:
+    
+    except Exception as e:
         app.logger.exception("Audio conversion failed")
         return jsonify({
             "error": f"Conversion failed: {str(e)[:300]}"
         }), 500
+
 
 
 if __name__ == "__main__":
