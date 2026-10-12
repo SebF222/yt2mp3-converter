@@ -70,8 +70,20 @@ def convert():
     
     except Exception as e:
         app.logger.exception("Audio conversion failed")
+
+        error_message = str(e)
+
+        if "Sign in to confirm you're not a bot" in error_message:
+            return jsonify({
+                "error": (
+                    "YouTube is blocking requests from this server. "
+                    "Try a media source you own or have permission to download, "
+                    "or use YouTube's official download options."
+                )
+            }), 502
+
         return jsonify({
-            "error": f"Conversion failed: {str(e)[:300]}"
+            "error": "Conversion failed. Please try again later."
         }), 500
 
 
