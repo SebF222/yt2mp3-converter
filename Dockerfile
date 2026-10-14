@@ -1,7 +1,6 @@
-```dockerfile
 FROM python:3.13-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg 
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -15,4 +14,3 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=10000
 
 CMD ["gunicorn", "--bind", "0.0.0.0:10000", "app:app"]
-```
