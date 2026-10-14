@@ -18,7 +18,7 @@ function App() {
     setMessage('Converting your audio... Please wait.')
 
     try {
-      const response = await fetch('https://yt2mp3-converter-33f6.onrender.com/api/convert', {
+      const response = await fetch('https://yt2mp3-converter-1.onrender.com/api/convert', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
