@@ -1,93 +1,99 @@
 
-import re
 import uuid
+import subprocess
 from pathlib import Path
 
-import yt_dlp
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 CORS(app)
 
+app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
+
 DOWNLOAD_FOLDER = Path("downloads").resolve()
 DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 
-
-def is_valid_url(url):
-    return (
-        url.startswith("https://")
-        and re.match(r"^https://[a-zA-Z0-9.-]+(?::\d+)?(?:/|$)", url)
-        and not any(char.isspace() for char in url)
-    )
+ALLOWED_EXTENSIONS = {
+    ".mp4", ".mov", ".mkv", ".webm", ".avi",
+    ".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"
+}
 
 
 @app.route("/")
 def home():
-    return jsonify({"message": "YT2MP3 Converter API is running!"})
+    return jsonify({"message": "YT2MP3 converter API is running!"})
 
 
 @app.route("/api/convert", methods=["POST"])
 def convert():
-    data = request.get_json(silent=True) or {}
-    video_url = data.get("url", "").strip()
+    if "file" not in request.files:
+        return jsonify({
+            "error": "Please upload an audio or video file."
+        }), 400
 
-    if not is_valid_url(video_url):
-        return jsonify({"error": "Please enter a valid HTTPS URL."}), 400
+    uploaded_file = request.files["file"]
+
+    if not uploaded_file.filename:
+        return jsonify({"error": "Please select a file."}), 400
+
+    safe_name = secure_filename(uploaded_file.filename)
+    extension = Path(safe_name).suffix.lower()
+
+    if extension not in ALLOWED_EXTENSIONS:
+        return jsonify({"error": "Unsupported file type."}), 400
 
     job_id = uuid.uuid4().hex
-    output_template = str(DOWNLOAD_FOLDER / f"{job_id}.%(ext)s")
-
-    options = {
-        "format": "bestaudio/best",
-        "outtmpl": output_template,
-        "noplaylist": True,
-        "quiet": True,
-        "no_warnings": True,
-        "postprocessors": [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192",
-        }],
-    }
+    input_path = DOWNLOAD_FOLDER / f"{job_id}{extension}"
+    output_path = DOWNLOAD_FOLDER / f"{job_id}.mp3"
 
     try:
-        with yt_dlp.YoutubeDL(options) as ydl:
-            ydl.download([video_url])
+        uploaded_file.save(input_path)
 
-        mp3_path = DOWNLOAD_FOLDER / f"{job_id}.mp3"
+        result = subprocess.run(
+            [
+                "ffmpeg", "-nostdin",
+                "-hide_banner", "-loglevel", "error",
+                "-i", str(input_path),
+                "-vn",
+                "-codec:a", "libmp3lame",
+                "-b:a", "192k",
+                "-y", str(output_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
 
-        if not mp3_path.is_file():
-            return jsonify({"error": "The MP3 file was not created."}), 500
+        if result.returncode != 0 or not output_path.is_file():
+            app.logger.error("FFmpeg error: %s", result.stderr[-2000:])
+            return jsonify({"error": "Could not convert this file."}), 422
 
         return send_file(
-            mp3_path,
+            output_path,
             as_attachment=True,
-            download_name="converted-audio.mp3",
+            download_name=f"{Path(safe_name).stem or 'audio'}.mp3",
             mimetype="audio/mpeg",
         )
 
-    
-    except Exception as e:
-        app.logger.exception("Audio conversion failed")
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "Conversion timed out."}), 408
 
-        error_message = str(e)
+    except Exception:
+        app.logger.exception("Conversion failed")
+        return jsonify({"error": "Conversion failed on the server."}), 500
 
-        if "Sign in to confirm you're not a bot" in error_message:
-            return jsonify({
-                "error": (
-                    "YouTube is blocking requests from this server. "
-                    "Try a media source you own or have permission to download, "
-                    "or use YouTube's official download options."
-                )
-            }), 502
+    finally:
+        input_path.unlink(missing_ok=True)
+        output_path.unlink(missing_ok=True)
 
-        return jsonify({
-            "error": "Conversion failed. Please try again later."
-        }), 500
 
+@app.errorhandler(413)
+def file_too_large(error):
+    return jsonify({"error": "Maximum upload size is 100 MB."}), 413
 
 
 if __name__ == "__main__":
     app.run(debug=False)
-
